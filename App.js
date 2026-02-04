@@ -11,6 +11,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import WifiManager from 'react-native-wifi-reborn';
 
 export default function App() {
@@ -127,8 +128,9 @@ export default function App() {
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar style="light" />
+    <SafeAreaProvider>
+      <SafeAreaView style={styles.container}>
+        <StatusBar style="light" />
       
       <View style={styles.header}>
         <Text style={styles.title}>📡 ScanBox</Text>
@@ -177,7 +179,8 @@ export default function App() {
           )
         }
       />
-    </View>
+      </SafeAreaView>
+    </SafeAreaProvider>
   );
 }
 
@@ -185,7 +188,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#0f0f1a',
-    paddingTop: 50,
   },
   header: {
     alignItems: 'center',
