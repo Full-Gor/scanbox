@@ -7,13 +7,13 @@ import {
   TouchableOpacity,
   RefreshControl,
   Platform,
-  NativeModules,
   PermissionsAndroid,
   Alert,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
+import WifiManager from 'react-native-wifi-reborn';
 
 interface WifiNetwork {
   ssid: string;
@@ -50,24 +50,26 @@ export default function App() {
 
   const scanNetworks = useCallback(async () => {
     if (scanning) return;
-    
+
     setScanning(true);
     try {
-      // Simulation de scan WiFi (Android natif requis pour vrai scan)
-      // En production, utiliser un module natif comme react-native-wifi-reborn
-      const mockNetworks: WifiNetwork[] = [
-        { ssid: 'Livebox-A1B2', bssid: '00:1A:2B:3C:4D:5E', level: -45, frequency: 2437, capabilities: '[WPA2-PSK]', timestamp: Date.now() },
-        { ssid: 'Freebox_5GHz', bssid: '00:2B:3C:4D:5E:6F', level: -62, frequency: 5180, capabilities: '[WPA2-PSK]', timestamp: Date.now() },
-        { ssid: 'SFR_WiFi', bssid: '00:3C:4D:5E:6F:7A', level: -78, frequency: 2412, capabilities: '[WPA2-PSK]', timestamp: Date.now() },
-        { ssid: 'ORANGE_Guest', bssid: '00:4D:5E:6F:7A:8B', level: -55, frequency: 2462, capabilities: '[OPEN]', timestamp: Date.now() },
-        { ssid: 'Bbox-123456', bssid: '00:5E:6F:7A:8B:9C', level: -70, frequency: 5240, capabilities: '[WPA3-SAE]', timestamp: Date.now() },
-      ].sort((a, b) => b.level - a.level);
-      
-      setNetworks(mockNetworks);
+      // Vrai scan WiFi via react-native-wifi-reborn
+      const wifiList = await WifiManager.loadWifiList();
+
+      const scannedNetworks: WifiNetwork[] = wifiList.map((wifi: any) => ({
+        ssid: wifi.SSID || '',
+        bssid: wifi.BSSID || '',
+        level: wifi.level || -100,
+        frequency: wifi.frequency || 2400,
+        capabilities: wifi.capabilities || '[UNKNOWN]',
+        timestamp: Date.now(),
+      })).sort((a: WifiNetwork, b: WifiNetwork) => b.level - a.level);
+
+      setNetworks(scannedNetworks);
       setLastScan(new Date());
     } catch (error) {
       console.error('Erreur scan:', error);
-      Alert.alert('Erreur', 'Impossible de scanner les reseaux');
+      Alert.alert('Erreur', 'Impossible de scanner les reseaux. Verifiez que le WiFi est active.');
     } finally {
       setScanning(false);
     }
