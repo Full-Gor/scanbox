@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   StyleSheet, Text, View, FlatList, TouchableOpacity,
   RefreshControl, ActivityIndicator, ScrollView
@@ -9,6 +9,46 @@ import { OpenPort, ConnectionGroup, ServiceStatus } from '../types';
 import { api } from '../services/api';
 
 type Section = 'services' | 'ports' | 'connections';
+
+// Labels intelligents pour les IPs connues
+function getConnectionLabel(ip: string, processes: string[]): string | null {
+  // IPs locales
+  if (ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1') {
+    if (processes.some(p => p.includes('node'))) return 'Services locaux (Node.js)';
+    return 'Localhost';
+  }
+  // Reseau local
+  if (ip.startsWith('192.168.')) return `Reseau local (${ip})`;
+  // Google
+  if (ip.startsWith('2a00:1450:') || ip.startsWith('142.250.') || ip.startsWith('172.217.')) return 'Google';
+  // VPS Contabo
+  if (ip === '207.180.204.232') return 'VPS Contabo (NexusTunnel)';
+  // Cloudflare
+  if (ip.startsWith('104.') || ip.startsWith('1.1.1.')) return 'Cloudflare';
+  // Navigation web generique (IPv6)
+  if (ip.startsWith('2607:') || ip.startsWith('2a00:') || ip.startsWith('2a03:')) return 'Navigation Web';
+  return null;
+}
+
+function getConnectionIcon(ip: string, processes: string[]): string {
+  if (ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1') return 'server';
+  if (ip === '207.180.204.232') return 'cloud-upload';
+  if (processes.some(p => p.toLowerCase().includes('chrome') || p.toLowerCase().includes('firefox'))) return 'globe';
+  if (processes.some(p => p.toLowerCase().includes('code'))) return 'code-slash';
+  if (processes.some(p => p.toLowerCase().includes('node'))) return 'logo-nodejs';
+  return 'git-network';
+}
+
+// Labels pour les ports connus
+function getPortLabel(port: number): string | null {
+  const known: Record<number, string> = {
+    22: 'SSH', 53: 'DNS', 80: 'HTTP', 443: 'HTTPS',
+    631: 'Imprimante', 3000: 'Cloud1', 3001: 'NexusBuild',
+    5678: 'N8N', 5679: 'N8N Worker', 8080: 'Proxy HTTP',
+    9090: 'Cockpit', 18955: 'VS Code', 51984: 'VS Code',
+  };
+  return known[port] || null;
+}
 
 export default function NetworkScreen() {
   const [section, setSection] = useState<Section>('services');
@@ -41,6 +81,9 @@ export default function NetworkScreen() {
       setLoading(false);
     }
   }, [loading]);
+
+  // Auto-load au montage
+  useEffect(() => { loadData(); }, []);
 
   const getServiceIcon = (name: string): string => {
     const n = name.toLowerCase();
@@ -128,29 +171,42 @@ export default function NetworkScreen() {
           <Text style={styles.statLabel}>Destinations</Text>
         </View>
       </View>
-      {connections.map((group) => (
-        <View key={group.ip} style={styles.card}>
-          <View style={[styles.iconCircle, { backgroundColor: colors.orange + '20' }]}>
-            <Ionicons name="git-network" size={20} color={colors.orange} />
-          </View>
-          <View style={styles.cardInfo}>
-            <View style={styles.cardRow}>
-              <Text style={styles.cardTitle} numberOfLines={1}>{group.ip}</Text>
-              <View style={styles.countBadge}>
-                <Text style={styles.countBadgeText}>{group.count}</Text>
-              </View>
+      {connections.map((group) => {
+        const label = getConnectionLabel(group.ip, group.processes);
+        const icon = getConnectionIcon(group.ip, group.processes);
+        const portsWithNames = group.ports.slice(0, 5).map(p => {
+          const name = getPortLabel(p);
+          return name ? `${p} (${name})` : `${p}`;
+        });
+        return (
+          <View key={group.ip} style={styles.card}>
+            <View style={[styles.iconCircle, { backgroundColor: colors.orange + '20' }]}>
+              <Ionicons name={icon as any} size={20} color={colors.orange} />
             </View>
-            {group.processes.length > 0 && (
-              <Text style={styles.cardSub}>{group.processes.join(', ')}</Text>
-            )}
-            {group.ports.length > 0 && (
-              <Text style={styles.portsList}>
-                Ports: {group.ports.slice(0, 5).join(', ')}{group.ports.length > 5 ? ` +${group.ports.length - 5}` : ''}
-              </Text>
-            )}
+            <View style={styles.cardInfo}>
+              <View style={styles.cardRow}>
+                <Text style={styles.cardTitle} numberOfLines={1}>
+                  {label || group.ip}
+                </Text>
+                <View style={styles.countBadge}>
+                  <Text style={styles.countBadgeText}>{group.count}</Text>
+                </View>
+              </View>
+              {label && (
+                <Text style={styles.connIP}>{group.ip}</Text>
+              )}
+              {group.processes.length > 0 && (
+                <Text style={styles.cardSub}>{group.processes.join(', ')}</Text>
+              )}
+              {group.ports.length > 0 && (
+                <Text style={styles.portsList}>
+                  Ports: {portsWithNames.join(', ')}{group.ports.length > 5 ? ` +${group.ports.length - 5}` : ''}
+                </Text>
+              )}
+            </View>
           </View>
-        </View>
-      ))}
+        );
+      })}
     </View>
   );
 
@@ -278,6 +334,7 @@ const styles = StyleSheet.create({
   },
   portBadgeText: { fontSize: 11, color: colors.primaryLight, fontWeight: '600' },
   portsList: { fontSize: 11, color: colors.textMuted, marginTop: 4 },
+  connIP: { fontSize: 12, color: colors.textMuted, marginTop: 1 },
   countBadge: {
     paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10,
     backgroundColor: colors.orange + '30',

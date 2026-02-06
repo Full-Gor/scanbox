@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   StyleSheet, Text, View, FlatList, TouchableOpacity,
   RefreshControl, Alert, ActivityIndicator
@@ -124,6 +124,9 @@ export default function DevicesScreen() {
       setScanning(false);
     }
   }, [scanning]);
+
+  // Auto-scan au montage
+  useEffect(() => { scanDevices(); }, []);
 
   const handleExport = () => {
     if (devices.length === 0) {
