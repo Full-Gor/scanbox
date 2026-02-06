@@ -4,10 +4,11 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import ScanScreen from './src/screens/ScanScreen';
 import DevicesScreen from './src/screens/DevicesScreen';
+import NetworkScreen from './src/screens/NetworkScreen';
 import HistoryScreen from './src/screens/HistoryScreen';
 import { colors } from './src/config';
 
-type TabType = 'scan' | 'devices' | 'history';
+type TabType = 'scan' | 'devices' | 'network' | 'history';
 
 interface Tab {
   id: TabType;
@@ -19,8 +20,16 @@ interface Tab {
 const tabs: Tab[] = [
   { id: 'scan', label: 'WiFi', icon: 'wifi-outline', iconActive: 'wifi' },
   { id: 'devices', label: 'Appareils', icon: 'hardware-chip-outline', iconActive: 'hardware-chip' },
+  { id: 'network', label: 'Reseau', icon: 'globe-outline', iconActive: 'globe' },
   { id: 'history', label: 'Historique', icon: 'time-outline', iconActive: 'time' },
 ];
+
+const subtitles: Record<TabType, string> = {
+  scan: 'Scanner WiFi',
+  devices: 'Appareils connectes',
+  network: 'Ports, services & connexions',
+  history: 'Historique',
+};
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>('scan');
@@ -29,6 +38,7 @@ export default function App() {
     switch (activeTab) {
       case 'scan': return <ScanScreen />;
       case 'devices': return <DevicesScreen />;
+      case 'network': return <NetworkScreen />;
       case 'history': return <HistoryScreen />;
     }
   };
@@ -40,10 +50,7 @@ export default function App() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>ScanBox</Text>
-        <Text style={styles.subtitle}>
-          {activeTab === 'scan' ? 'Scanner WiFi' :
-           activeTab === 'devices' ? 'Appareils connectes' : 'Historique'}
-        </Text>
+        <Text style={styles.subtitle}>{subtitles[activeTab]}</Text>
       </View>
 
       {/* Screen content */}
@@ -61,7 +68,7 @@ export default function App() {
           >
             <Ionicons
               name={(activeTab === tab.id ? tab.iconActive : tab.icon) as any}
-              size={24}
+              size={22}
               color={activeTab === tab.id ? colors.primaryLight : colors.textMuted}
             />
             <Text style={[
@@ -115,7 +122,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   tabLabel: {
-    fontSize: 11,
+    fontSize: 10,
     color: colors.textMuted,
     marginTop: 4,
   },

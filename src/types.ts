@@ -28,3 +28,24 @@ export interface DeviceScanResult {
   devices: NetworkDevice[];
   scannedAt: string;
 }
+
+export interface OpenPort {
+  port: number;
+  name: string | null;
+  process: string | null;
+  state: string;
+}
+
+export interface ConnectionGroup {
+  ip: string;
+  count: number;
+  processes: string[];
+  ports: number[];
+  localPorts: number[];
+}
+
+export interface ServiceStatus {
+  name: string;
+  active: boolean;
+  status: string;
+}
