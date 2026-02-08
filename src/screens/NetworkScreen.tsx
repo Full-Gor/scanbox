@@ -19,7 +19,7 @@ function getConnectionLabel(ip: string, processes: string[]): string | null {
   if (ip.startsWith('192.168.')) return `Reseau local (${ip})`;
   if (ip.startsWith('2a00:1450:') || ip.startsWith('142.250.') || ip.startsWith('172.217.')) return 'Google';
   if (ip === '207.180.204.232') return 'VPS Contabo (NexusTunnel)';
-  if (ip.startsWith('104.') || ip.startsWith('1.1.1.')) return 'Cloudflare';
+  if (ip.startsWith('104.') || ip.startsWith('1.1.1.')) return 'Serveur Internet';
   if (ip.startsWith('2607:') || ip.startsWith('2a00:') || ip.startsWith('2a03:')) return 'Navigation Web';
   return null;
 }
@@ -260,11 +260,12 @@ export default function NetworkScreen() {
         </TouchableOpacity>
       </View>
 
+      <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: 6, marginLeft: 4 }}>Raccourcis :</Text>
       <View style={styles.pingShortcuts}>
         {[
-          { label: 'Google', value: '8.8.8.8' },
-          { label: 'Cloudflare', value: '1.1.1.1' },
-          { label: 'Box', value: '192.168.1.254' },
+          { label: '🌐 Internet', value: '8.8.8.8', desc: 'Tester la connexion' },
+          { label: '📡 Ma Box', value: '192.168.1.254', desc: 'Tester le routeur' },
+          { label: 'google.com', value: 'google.com', desc: 'Tester un site' },
         ].map(shortcut => (
           <TouchableOpacity
             key={shortcut.value}
@@ -350,7 +351,7 @@ export default function NetworkScreen() {
       {!pingResult && !pinging && (
         <View style={styles.pingPlaceholder}>
           <Ionicons name="pulse" size={48} color={colors.textMuted} />
-          <Text style={styles.pingPlaceholderText}>Entrez une IP ou un domaine pour tester la latence</Text>
+          <Text style={styles.pingPlaceholderText}>Testez si un appareil ou un site repond{'\n'}Utilisez les raccourcis ou tapez une adresse</Text>
         </View>
       )}
     </View>
