@@ -27,7 +27,7 @@ const tabs: Tab[] = [
 const subtitles: Record<TabType, string> = {
   scan: 'Scanner WiFi',
   devices: 'Appareils connectes',
-  network: 'Ports, services & connexions',
+  network: 'Debit, ping, services & ports',
   history: 'Historique',
 };
 
