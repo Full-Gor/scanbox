@@ -260,12 +260,13 @@ export default function NetworkScreen() {
         </TouchableOpacity>
       </View>
 
-      <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: 6, marginLeft: 4 }}>Raccourcis :</Text>
+      <Text style={{ color: colors.textMuted, fontSize: 12, marginBottom: 6, marginLeft: 4 }}>Tester un site ou appareil :</Text>
       <View style={styles.pingShortcuts}>
         {[
-          { label: '🌐 Internet', value: '8.8.8.8', desc: 'Tester la connexion' },
-          { label: '📡 Ma Box', value: '192.168.1.254', desc: 'Tester le routeur' },
-          { label: 'google.com', value: 'google.com', desc: 'Tester un site' },
+          { label: 'Mon Internet', value: '8.8.8.8' },
+          { label: 'Ma Box WiFi', value: '192.168.1.254' },
+          { label: 'google.com', value: 'google.com' },
+          { label: 'Mon PC', value: '192.168.1.144' },
         ].map(shortcut => (
           <TouchableOpacity
             key={shortcut.value}
@@ -654,7 +655,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
   },
   pingBtnDisabled: { opacity: 0.5 },
-  pingShortcuts: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  pingShortcuts: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
   shortcutChip: {
     paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20,
     backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
