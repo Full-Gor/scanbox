@@ -1,31 +1,25 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import {
   StyleSheet, Text, View, FlatList, TouchableOpacity,
-  RefreshControl, ActivityIndicator, ScrollView
+  RefreshControl, ActivityIndicator, ScrollView, TextInput
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../config';
-import { OpenPort, ConnectionGroup, ServiceStatus } from '../types';
+import { OpenPort, ConnectionGroup, ServiceStatus, SpeedTestResult, PingResult } from '../types';
 import { api } from '../services/api';
 
-type Section = 'services' | 'ports' | 'connections';
+type Section = 'speedtest' | 'ping' | 'ports' | 'connections';
 
 // Labels intelligents pour les IPs connues
 function getConnectionLabel(ip: string, processes: string[]): string | null {
-  // IPs locales
   if (ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1') {
     if (processes.some(p => p.includes('node'))) return 'Services locaux (Node.js)';
     return 'Localhost';
   }
-  // Reseau local
   if (ip.startsWith('192.168.')) return `Reseau local (${ip})`;
-  // Google
   if (ip.startsWith('2a00:1450:') || ip.startsWith('142.250.') || ip.startsWith('172.217.')) return 'Google';
-  // VPS Contabo
   if (ip === '207.180.204.232') return 'VPS Contabo (NexusTunnel)';
-  // Cloudflare
   if (ip.startsWith('104.') || ip.startsWith('1.1.1.')) return 'Cloudflare';
-  // Navigation web generique (IPv6)
   if (ip.startsWith('2607:') || ip.startsWith('2a00:') || ip.startsWith('2a03:')) return 'Navigation Web';
   return null;
 }
@@ -39,7 +33,6 @@ function getConnectionIcon(ip: string, processes: string[]): string {
   return 'git-network';
 }
 
-// Labels pour les ports connus
 function getPortLabel(port: number): string | null {
   const known: Record<number, string> = {
     22: 'SSH', 53: 'DNS', 80: 'HTTP', 443: 'HTTPS',
@@ -50,9 +43,15 @@ function getPortLabel(port: number): string | null {
   return known[port] || null;
 }
 
+function getSpeedColor(speed: number): string {
+  if (speed >= 50) return colors.success;
+  if (speed >= 20) return '#22c55e';
+  if (speed >= 10) return colors.orange;
+  return colors.danger;
+}
+
 export default function NetworkScreen() {
-  const [section, setSection] = useState<Section>('services');
-  const [services, setServices] = useState<ServiceStatus[]>([]);
+  const [section, setSection] = useState<Section>('speedtest');
   const [ports, setPorts] = useState<OpenPort[]>([]);
   const [portCount, setPortCount] = useState(0);
   const [connections, setConnections] = useState<ConnectionGroup[]>([]);
@@ -60,17 +59,25 @@ export default function NetworkScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Speed test
+  const [speedResult, setSpeedResult] = useState<SpeedTestResult | null>(null);
+  const [speedTesting, setSpeedTesting] = useState(false);
+  const [speedPhase, setSpeedPhase] = useState<string>('');
+
+  // Ping
+  const [pingTarget, setPingTarget] = useState('8.8.8.8');
+  const [pingResult, setPingResult] = useState<PingResult | null>(null);
+  const [pinging, setPinging] = useState(false);
+
   const loadData = useCallback(async () => {
     if (loading) return;
     setLoading(true);
     setError(null);
     try {
-      const [svcData, portData, connData] = await Promise.all([
-        api.getServices(),
+      const [portData, connData] = await Promise.all([
         api.getPorts(),
         api.getConnections(),
       ]);
-      setServices(svcData.services);
       setPorts(portData.ports);
       setPortCount(portData.count);
       setConnections(connData.groups);
@@ -82,17 +89,37 @@ export default function NetworkScreen() {
     }
   }, [loading]);
 
-  // Auto-load au montage
   useEffect(() => { loadData(); }, []);
 
-  const getServiceIcon = (name: string): string => {
-    const n = name.toLowerCase();
-    if (n.includes('cloud')) return 'cloud';
-    if (n.includes('nexusbuild')) return 'construct';
-    if (n.includes('nginx')) return 'globe';
-    if (n.includes('ssh')) return 'terminal';
-    if (n.includes('docker')) return 'cube';
-    return 'server';
+  const runSpeedTest = async () => {
+    if (speedTesting) return;
+    setSpeedTesting(true);
+    setSpeedResult(null);
+    setSpeedPhase('Test en cours...');
+    try {
+      const result = await api.speedTest();
+      setSpeedResult(result);
+      setSpeedPhase('');
+    } catch (err: any) {
+      setError(err.message);
+      setSpeedPhase('');
+    } finally {
+      setSpeedTesting(false);
+    }
+  };
+
+  const runPing = async () => {
+    if (pinging || !pingTarget.trim()) return;
+    setPinging(true);
+    setPingResult(null);
+    try {
+      const result = await api.ping(pingTarget.trim());
+      setPingResult(result);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setPinging(false);
+    }
   };
 
   const getPortIcon = (port: OpenPort): string => {
@@ -105,26 +132,175 @@ export default function NetworkScreen() {
     return 'radio-button-on';
   };
 
-  const renderServices = () => (
+  const renderSpeedTest = () => (
     <View style={styles.sectionContent}>
-      {services.map((svc) => (
-        <View key={svc.name} style={styles.card}>
-          <View style={[styles.iconCircle, { backgroundColor: svc.active ? colors.success + '20' : colors.danger + '20' }]}>
-            <Ionicons
-              name={getServiceIcon(svc.name) as any}
-              size={22}
-              color={svc.active ? colors.success : colors.danger}
-            />
-          </View>
-          <View style={styles.cardInfo}>
-            <Text style={styles.cardTitle}>{svc.name}</Text>
-            <Text style={[styles.cardStatus, { color: svc.active ? colors.success : colors.danger }]}>
-              {svc.active ? 'Actif' : 'Inactif'}
+      {/* Bouton lancer */}
+      <TouchableOpacity
+        style={[styles.speedBtn, speedTesting && styles.speedBtnDisabled]}
+        onPress={runSpeedTest}
+        disabled={speedTesting}
+      >
+        {speedTesting ? (
+          <ActivityIndicator size="small" color="#fff" />
+        ) : (
+          <Ionicons name="speedometer" size={24} color="#fff" />
+        )}
+        <Text style={styles.speedBtnText}>
+          {speedTesting ? speedPhase : 'Lancer le Speed Test'}
+        </Text>
+      </TouchableOpacity>
+
+      {/* Résultats */}
+      {speedResult && (
+        <View style={styles.speedResults}>
+          {/* Download */}
+          <View style={styles.speedCard}>
+            <View style={[styles.speedIconCircle, { backgroundColor: getSpeedColor(speedResult.download) + '20' }]}>
+              <Ionicons name="arrow-down-circle" size={28} color={getSpeedColor(speedResult.download)} />
+            </View>
+            <Text style={styles.speedLabel}>Download</Text>
+            <Text style={[styles.speedValue, { color: getSpeedColor(speedResult.download) }]}>
+              {speedResult.download.toFixed(1)}
             </Text>
+            <Text style={styles.speedUnit}>Mbps</Text>
           </View>
-          <View style={[styles.statusDot, { backgroundColor: svc.active ? colors.success : colors.danger }]} />
+
+          {/* Upload */}
+          <View style={styles.speedCard}>
+            <View style={[styles.speedIconCircle, { backgroundColor: getSpeedColor(speedResult.upload) + '20' }]}>
+              <Ionicons name="arrow-up-circle" size={28} color={getSpeedColor(speedResult.upload)} />
+            </View>
+            <Text style={styles.speedLabel}>Upload</Text>
+            <Text style={[styles.speedValue, { color: getSpeedColor(speedResult.upload) }]}>
+              {speedResult.upload.toFixed(1)}
+            </Text>
+            <Text style={styles.speedUnit}>Mbps</Text>
+          </View>
+
+          {/* Latence */}
+          <View style={styles.speedCard}>
+            <View style={[styles.speedIconCircle, { backgroundColor: colors.primaryLight + '20' }]}>
+              <Ionicons name="timer" size={28} color={colors.primaryLight} />
+            </View>
+            <Text style={styles.speedLabel}>Latence</Text>
+            <Text style={[styles.speedValue, { color: colors.primaryLight }]}>
+              {speedResult.latency !== null ? speedResult.latency.toFixed(1) : '--'}
+            </Text>
+            <Text style={styles.speedUnit}>ms</Text>
+          </View>
         </View>
-      ))}
+      )}
+
+      {speedResult && (
+        <Text style={styles.speedTime}>
+          Teste le {new Date(speedResult.testedAt).toLocaleString('fr-FR')}
+        </Text>
+      )}
+    </View>
+  );
+
+  const renderPing = () => (
+    <View style={styles.sectionContent}>
+      {/* Champ cible */}
+      <View style={styles.pingInputRow}>
+        <TextInput
+          style={styles.pingInput}
+          value={pingTarget}
+          onChangeText={setPingTarget}
+          placeholder="IP ou domaine (ex: 192.168.1.1)"
+          placeholderTextColor={colors.textMuted}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        <TouchableOpacity
+          style={[styles.pingBtn, pinging && styles.pingBtnDisabled]}
+          onPress={runPing}
+          disabled={pinging}
+        >
+          {pinging ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Ionicons name="pulse" size={20} color="#fff" />
+          )}
+        </TouchableOpacity>
+      </View>
+
+      {/* Raccourcis */}
+      <View style={styles.pingShortcuts}>
+        {[
+          { label: 'Google DNS', value: '8.8.8.8' },
+          { label: 'Cloudflare', value: '1.1.1.1' },
+          { label: 'Box', value: '192.168.1.254' },
+          { label: 'google.com', value: 'google.com' },
+        ].map(s => (
+          <TouchableOpacity
+            key={s.value}
+            style={[styles.shortcutBtn, pingTarget === s.value && styles.shortcutBtnActive]}
+            onPress={() => setPingTarget(s.value)}
+          >
+            <Text style={[styles.shortcutText, pingTarget === s.value && styles.shortcutTextActive]}>
+              {s.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Résultats ping */}
+      {pingResult && (
+        <View style={styles.pingResults}>
+          {/* Stats */}
+          <View style={styles.statsRow}>
+            <View style={styles.statBox}>
+              <Text style={[styles.statValue, { color: pingResult.loss === 0 ? colors.success : colors.danger }]}>
+                {pingResult.loss}%
+              </Text>
+              <Text style={styles.statLabel}>Perte</Text>
+            </View>
+            <View style={styles.statBox}>
+              <Text style={styles.statValue}>
+                {pingResult.avg !== null ? `${pingResult.avg.toFixed(1)}` : '--'}
+              </Text>
+              <Text style={styles.statLabel}>Moy. (ms)</Text>
+            </View>
+            <View style={styles.statBox}>
+              <Text style={styles.statValue}>{pingResult.received}/{pingResult.transmitted}</Text>
+              <Text style={styles.statLabel}>Recu</Text>
+            </View>
+          </View>
+
+          {/* Min/Max */}
+          {pingResult.min !== null && (
+            <View style={styles.pingMinMax}>
+              <Text style={styles.pingMinMaxText}>
+                Min: {pingResult.min.toFixed(1)} ms  |  Max: {pingResult.max?.toFixed(1)} ms
+              </Text>
+            </View>
+          )}
+
+          {/* Détail pings */}
+          {pingResult.pings.map((p) => (
+            <View key={p.seq} style={styles.card}>
+              <View style={[styles.iconCircle, { backgroundColor: colors.success + '20' }]}>
+                <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+              </View>
+              <View style={styles.cardInfo}>
+                <Text style={styles.cardTitle}>Sequence #{p.seq}</Text>
+                <Text style={styles.cardSub}>TTL: {p.ttl}  |  {p.time.toFixed(1)} ms</Text>
+              </View>
+              <Text style={[styles.pingTimeText, { color: p.time < 10 ? colors.success : p.time < 50 ? colors.orange : colors.danger }]}>
+                {p.time.toFixed(1)} ms
+              </Text>
+            </View>
+          ))}
+
+          {pingResult.pings.length === 0 && (
+            <View style={styles.pingFail}>
+              <Ionicons name="close-circle" size={48} color={colors.danger} />
+              <Text style={styles.pingFailText}>Aucune reponse de {pingResult.target}</Text>
+            </View>
+          )}
+        </View>
+      )}
     </View>
   );
 
@@ -215,7 +391,8 @@ export default function NetworkScreen() {
       {/* Onglets sous-section */}
       <View style={styles.tabs}>
         {([
-          { id: 'services', label: 'Services', icon: 'server' },
+          { id: 'speedtest', label: 'Speed', icon: 'speedometer' },
+          { id: 'ping', label: 'Ping', icon: 'pulse' },
           { id: 'ports', label: 'Ports', icon: 'radio-button-on' },
           { id: 'connections', label: 'Connexions', icon: 'git-network' },
         ] as { id: Section; label: string; icon: string }[]).map(tab => (
@@ -247,12 +424,14 @@ export default function NetworkScreen() {
           />
         }
       >
-        {loading && services.length === 0 ? (
+        {section === 'speedtest' && renderSpeedTest()}
+        {section === 'ping' && renderPing()}
+        {section === 'ports' && (loading && ports.length === 0 ? (
           <View style={styles.empty}>
             <ActivityIndicator size="large" color={colors.primaryLight} />
             <Text style={styles.emptyText}>Chargement...</Text>
           </View>
-        ) : error ? (
+        ) : error && ports.length === 0 ? (
           <View style={styles.empty}>
             <Ionicons name="alert-circle-outline" size={64} color={colors.danger} />
             <Text style={styles.emptyText}>{error}</Text>
@@ -260,31 +439,14 @@ export default function NetworkScreen() {
               <Text style={styles.retryBtnText}>Reessayer</Text>
             </TouchableOpacity>
           </View>
-        ) : services.length === 0 && ports.length === 0 ? (
+        ) : renderPorts())}
+        {section === 'connections' && (loading && connections.length === 0 ? (
           <View style={styles.empty}>
-            <Ionicons name="globe-outline" size={64} color={colors.textMuted} />
-            <Text style={styles.emptyText}>Aucune donnee</Text>
-            <Text style={styles.emptySub}>Tirez vers le bas pour charger</Text>
+            <ActivityIndicator size="large" color={colors.primaryLight} />
+            <Text style={styles.emptyText}>Chargement...</Text>
           </View>
-        ) : (
-          <>
-            {section === 'services' && renderServices()}
-            {section === 'ports' && renderPorts()}
-            {section === 'connections' && renderConnections()}
-          </>
-        )}
+        ) : renderConnections())}
       </ScrollView>
-
-      <TouchableOpacity
-        style={[styles.loadBtn, loading && styles.loadBtnDisabled]}
-        onPress={loadData}
-        disabled={loading}
-      >
-        <Ionicons name={loading ? 'sync' : 'refresh'} size={24} color="#fff" />
-        <Text style={styles.loadBtnText}>
-          {loading ? 'Chargement...' : 'Actualiser'}
-        </Text>
-      </TouchableOpacity>
     </View>
   );
 }
@@ -297,13 +459,13 @@ const styles = StyleSheet.create({
   },
   tab: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    paddingVertical: 10, borderRadius: 8, gap: 6,
+    paddingVertical: 10, borderRadius: 8, gap: 4,
   },
   tabActive: { backgroundColor: colors.primary + '30' },
-  tabText: { fontSize: 13, color: colors.textMuted },
+  tabText: { fontSize: 12, color: colors.textMuted },
   tabTextActive: { color: colors.primaryLight, fontWeight: '600' },
   scrollView: { flex: 1 },
-  sectionContent: { paddingHorizontal: 16, paddingBottom: 120 },
+  sectionContent: { paddingHorizontal: 16, paddingBottom: 40 },
   statsRow: {
     flexDirection: 'row', gap: 12, marginBottom: 12,
   },
@@ -326,7 +488,6 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 15, fontWeight: '600', color: colors.text, flexShrink: 1 },
   cardStatus: { fontSize: 13, marginTop: 2 },
   cardSub: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
-  statusDot: { width: 10, height: 10, borderRadius: 5 },
   portNumber: { fontSize: 16, fontWeight: 'bold', color: colors.text },
   portBadge: {
     paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4,
@@ -348,11 +509,60 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary, borderRadius: 8,
   },
   retryBtnText: { color: '#fff', fontWeight: '600' },
-  loadBtn: {
-    position: 'absolute', bottom: 40, left: 20, right: 20,
+  // Speed Test styles
+  speedBtn: {
     backgroundColor: colors.primary, flexDirection: 'row',
-    alignItems: 'center', justifyContent: 'center', paddingVertical: 16, borderRadius: 12, gap: 8,
+    alignItems: 'center', justifyContent: 'center', paddingVertical: 18,
+    borderRadius: 16, gap: 10, marginBottom: 20,
   },
-  loadBtnDisabled: { backgroundColor: '#1e40af', opacity: 0.7 },
-  loadBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  speedBtnDisabled: { backgroundColor: '#1e40af', opacity: 0.7 },
+  speedBtnText: { color: '#fff', fontSize: 18, fontWeight: '700' },
+  speedResults: {
+    flexDirection: 'row', gap: 10, marginBottom: 12,
+  },
+  speedCard: {
+    flex: 1, backgroundColor: colors.card, borderRadius: 16,
+    padding: 16, alignItems: 'center',
+  },
+  speedIconCircle: {
+    width: 48, height: 48, borderRadius: 24,
+    justifyContent: 'center', alignItems: 'center', marginBottom: 8,
+  },
+  speedLabel: { fontSize: 12, color: colors.textSecondary, marginBottom: 4 },
+  speedValue: { fontSize: 22, fontWeight: 'bold' },
+  speedUnit: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
+  speedTime: { fontSize: 12, color: colors.textMuted, textAlign: 'center', marginTop: 8 },
+  // Ping styles
+  pingInputRow: {
+    flexDirection: 'row', gap: 10, marginBottom: 12,
+  },
+  pingInput: {
+    flex: 1, backgroundColor: colors.card, borderRadius: 12,
+    paddingHorizontal: 16, paddingVertical: 14, color: colors.text,
+    fontSize: 15, borderWidth: 1, borderColor: colors.primary + '40',
+  },
+  pingBtn: {
+    backgroundColor: colors.primary, width: 52, borderRadius: 12,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  pingBtnDisabled: { backgroundColor: '#1e40af', opacity: 0.7 },
+  pingShortcuts: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16,
+  },
+  shortcutBtn: {
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+    backgroundColor: colors.card, borderWidth: 1, borderColor: colors.primary + '30',
+  },
+  shortcutBtnActive: { backgroundColor: colors.primary + '30', borderColor: colors.primaryLight },
+  shortcutText: { fontSize: 13, color: colors.textSecondary },
+  shortcutTextActive: { color: colors.primaryLight, fontWeight: '600' },
+  pingResults: { marginTop: 8 },
+  pingMinMax: {
+    backgroundColor: colors.card, borderRadius: 10, padding: 12,
+    alignItems: 'center', marginBottom: 12,
+  },
+  pingMinMaxText: { fontSize: 13, color: colors.textSecondary },
+  pingTimeText: { fontSize: 14, fontWeight: 'bold' },
+  pingFail: { alignItems: 'center', paddingVertical: 30 },
+  pingFailText: { color: colors.danger, fontSize: 15, marginTop: 10, textAlign: 'center' },
 });

@@ -1,5 +1,5 @@
 import { API_BASE_URL } from '../config';
-import { WifiNetwork, ScanHistoryItem, DeviceScanResult, OpenPort, ConnectionGroup, ServiceStatus, KnownDevice } from '../types';
+import { WifiNetwork, ScanHistoryItem, DeviceScanResult, OpenPort, ConnectionGroup, ServiceStatus, KnownDevice, SpeedTestResult, PingResult } from '../types';
 
 class ApiService {
   private baseUrl: string;
@@ -74,6 +74,26 @@ class ApiService {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ trusted, name })
+    });
+    const data = await response.json();
+    if (!data.success) throw new Error(data.error);
+    return data.data;
+  }
+
+  // Speed Test
+  async speedTest(): Promise<SpeedTestResult> {
+    const response = await fetch(`${this.baseUrl}/network/speedtest`);
+    const data = await response.json();
+    if (!data.success) throw new Error(data.error);
+    return data.data;
+  }
+
+  // Ping
+  async ping(target: string): Promise<PingResult> {
+    const response = await fetch(`${this.baseUrl}/network/ping`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target })
     });
     const data = await response.json();
     if (!data.success) throw new Error(data.error);

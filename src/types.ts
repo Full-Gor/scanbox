@@ -56,6 +56,26 @@ export interface ServiceStatus {
   status: string;
 }
 
+export interface SpeedTestResult {
+  download: number;
+  upload: number;
+  latency: number | null;
+  unit: string;
+  testedAt: string;
+}
+
+export interface PingResult {
+  target: string;
+  pings: { seq: number; ttl: number; time: number }[];
+  transmitted: number;
+  received: number;
+  loss: number;
+  min: number | null;
+  avg: number | null;
+  max: number | null;
+  testedAt: string;
+}
+
 export interface KnownDevice {
   mac: string;
   ip: string;
