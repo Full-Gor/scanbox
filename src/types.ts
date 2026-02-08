@@ -13,6 +13,10 @@ export interface NetworkDevice {
   mac: string | null;
   vendor: string | null;
   isServer: boolean;
+  mdnsName?: string;
+  os?: string | null;
+  isNew?: boolean;
+  trusted?: boolean;
 }
 
 export interface ScanHistoryItem {
@@ -26,6 +30,7 @@ export interface DeviceScanResult {
   serverIP: string;
   subnet: string;
   devices: NetworkDevice[];
+  newDevices: number;
   scannedAt: string;
 }
 
@@ -48,4 +53,15 @@ export interface ServiceStatus {
   name: string;
   active: boolean;
   status: string;
+}
+
+export interface KnownDevice {
+  mac: string;
+  ip: string;
+  hostname: string | null;
+  vendor: string | null;
+  customName?: string;
+  firstSeen: string;
+  lastSeen: string;
+  trusted: boolean;
 }
