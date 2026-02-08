@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../config';
-import { NetworkDevice } from '../types';
+import { NetworkDevice, KnownDevice } from '../types';
 import { api } from '../services/api';
 import { exportDevicesJSON, exportDevicesCSV } from '../services/export';
 
@@ -107,8 +107,18 @@ export default function DevicesScreen() {
     setScanning(true);
     setError(null);
     try {
-      const result = await api.scanDevices();
-      setDevices(result.devices);
+      const [result, knownDevices] = await Promise.all([
+        api.scanDevices(),
+        api.getKnownDevices().catch(() => ({} as Record<string, KnownDevice>))
+      ]);
+      // Fusionner les noms personnalisés dans les appareils scannés
+      const devicesWithNames = result.devices.map(d => {
+        if (d.mac && knownDevices[d.mac]?.customName) {
+          return { ...d, customName: knownDevices[d.mac].customName };
+        }
+        return d;
+      });
+      setDevices(devicesWithNames);
       setServerIP(result.serverIP);
       setSubnet(result.subnet);
       setNewCount(result.newDevices || 0);
@@ -179,7 +189,7 @@ export default function DevicesScreen() {
       options.push({ text: 'Marquer suspect', onPress: () => handleTrust(device, false) });
     }
     if (device.mac) {
-      options.push({ text: 'Nommer cet appareil', onPress: () => { setNameModal(device); setCustomName(''); } });
+      options.push({ text: 'Nommer cet appareil', onPress: () => { setNameModal(device); setCustomName(device.customName || ''); } });
     }
     const deviceLabel = getDeviceLabel(device) || '';
     if (deviceLabel.toLowerCase().includes('pc') || deviceLabel.toLowerCase().includes('serveur') || deviceLabel.toLowerCase().includes('windows')) {
@@ -195,7 +205,7 @@ export default function DevicesScreen() {
   const renderDevice = ({ item }: { item: NetworkDevice }) => {
     const label = getDeviceLabel(item);
     const iconColor = getDeviceColor(item);
-    const displayName = item.mdnsName || item.hostname;
+    const displayName = item.customName || item.mdnsName || item.hostname;
 
     return (
       <TouchableOpacity style={styles.deviceCard} onPress={() => handleDevicePress(item)}>

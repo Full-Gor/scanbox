@@ -17,6 +17,7 @@ export interface NetworkDevice {
   os?: string | null;
   isNew?: boolean;
   trusted?: boolean;
+  customName?: string;
 }
 
 export interface ScanHistoryItem {
